@@ -1,0 +1,277 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2636
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\paperw11900\paperh16840\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\pard\tx566\tx1133\tx1700\tx2267\tx2834\tx3401\tx3968\tx4535\tx5102\tx5669\tx6236\tx6803\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 DROP DATABASE IF EXISTS furniture_store;\
+CREATE DATABASE furniture_store;\
+USE furniture_store;\
+SET SQL_SAFE_UPDATES=0;\
+\
+CREATE TABLE products(\
+product_id INT UNSIGNED AUTO_INCREMENT,\
+product_name VARCHAR(255),\
+company_name VARCHAR(255),\
+price INT,\
+quantity INT UNSIGNED,\
+PRIMARY KEY (product_id)\
+);\
+\
+CREATE TABLE suppliers(\
+supplier_id INT UNSIGNED AUTO_INCREMENT,\
+company_name VARCHAR(255),\
+company_website VARCHAR(255),\
+company_address VARCHAR(255),\
+company_contact_person VARCHAR(255),\
+PRIMARY KEY(supplier_id)\
+);\
+\
+CREATE TABLE staff(\
+staff_id INT UNSIGNED AUTO_INCREMENT,\
+staff_name VARCHAR(255),\
+staff_phone_number VARCHAR (255),\
+staff_email VARCHAR(255),\
+PRIMARY KEY(staff_id)\
+);\
+\
+CREATE TABLE customers(\
+customer_id INT UNSIGNED AUTO_INCREMENT,\
+customer_name VARBINARY(2000),\
+customer_phone_number VARBINARY(2000),\
+customer_email VARBINARY(2000),\
+customer_credit_card VARBINARY(2000),\
+PRIMARY KEY(customer_id)\
+);\
+\
+CREATE TABLE orders(\
+order_id INT UNSIGNED AUTO_INCREMENT,\
+product_id INT,\
+quantity INT UNSIGNED,\
+customer_id INT,\
+order_date VARCHAR(255),\
+price INT,\
+PRIMARY KEY(order_id)\
+);\
+\
+CREATE TABLE transaction_history(\
+transaction_id INT UNSIGNED AUTO_INCREMENT,\
+order_id INT,\
+customer_id INT,\
+product_id INT,\
+quantity INT UNSIGNED,\
+cost_in_SEK INT,\
+order_date VARCHAR(255),\
+PRIMARY KEY(transaction_id)\
+);\
+\
+/* STORED PROCEDURE - ADD CUSTOMER */\
+DELIMITER $$\
+CREATE DEFINER=`root`@`localhost` PROCEDURE `add_customer`(cname VARCHAR(255), phone_number VARCHAR(255), email VARCHAR(255), credit_card VARCHAR(255))\
+BEGIN\
+\
+INSERT INTO customers (customer_name, customer_phone_number, customer_email, customer_credit_card)\
+VALUES (\
+AES_ENCRYPT(cname, 'key'),\
+AES_ENCRYPT(phone_number, 'key'),\
+AES_ENCRYPT(email, 'key'),\
+AES_ENCRYPT(credit_card, 'key'));\
+\
+END$$\
+\
+DELIMITER ;\
+/* STORED PROCEDURE - DECRYPT CUSTOMER */\
+DELIMITER $$\
+CREATE DEFINER=`root`@`localhost` PROCEDURE `decrypt_customer`(passwordToDecrypt VARCHAR(255))\
+BEGIN\
+\
+IF passwordToDecrypt = 'secret' THEN\
+\
+SELECT cast(AES_DECRYPT(customer_name, 'key') as char(100)),\
+cast(AES_DECRYPT(customer_phone_number, 'key') as char(100)),\
+cast(AES_DECRYPT(customer_email, 'key') as char(100)),\
+cast(AES_DECRYPT(customer_credit_card, 'key') as char(100))\
+FROM customers;\
+\
+END IF;\
+\
+END$$\
+\
+DELIMITER ;\
+\
+/* STORED PROCEDURE - REMOVE CUSTOMER */\
+DELIMITER $$\
+CREATE PROCEDURE `remove_customer` (id int)\
+BEGIN\
+\
+DELETE FROM customers \
+WHERE customer_ID = id;\
+\
+END$$\
+DELIMITER ;\
+\
+/* STORED PROCEDURE - ADD ORDER */\
+DELIMITER $$\
+CREATE DEFINER=`root`@`localhost` PROCEDURE `add_order`(productID INT, product_quantity INT, customerID INT, date_of_order VARCHAR(255), price_per_product VARCHAR(255))\
+BEGIN\
+\
+DECLARE `ROLLBACK` bool DEFAULT 0;\
+DECLARE CONTINUE HANDLER FOR SQLEXCEPTION SET `ROLLBACK`=1;\
+\
+START TRANSACTION;\
+\
+INSERT INTO orders(product_id, quantity, customer_id, order_date, price)\
+VALUES (productID, product_quantity, customerID, date_of_order, price_per_product);\
+\
+\
+\
+INSERT INTO transaction_history (customer_id, product_id, quantity, cost_in_SEK, order_date)\
+VALUES (customerID, productID, product_quantity, price_per_product * product_quantity, date_of_order);\
+\
+UPDATE products \
+SET quantity = quantity - product_quantity \
+WHERE product_id = productID;\
+\
+IF `ROLLBACK` THEN \
+SET @ERROR_TEXT = 'a ROLLBACK has occured, check product quantity';\
+SELECT @ERROR_TEXT;\
+ROLLBACK;\
+\
+ELSE COMMIT;\
+\
+END IF;\
+\
+END$$\
+DELIMITER ;\
+\
+/* STORED PROCEDURE - REMOVE ORDER */\
+DELIMITER $$\
+CREATE PROCEDURE `remove_order` (orderID int)\
+BEGIN\
+\
+DELETE FROM orders \
+WHERE order_id = orderID;\
+\
+END$$\
+DELIMITER ;\
+\
+/* STORED PROCEDURE - RESTORE PRODUCT QUANTITY AFTER REMOVED ORDER */\
+DELIMITER $$\
+CREATE PROCEDURE `restore_cancled_order` (productID INT, quantityRemoved INT)\
+BEGIN\
+\
+UPDATE products\
+SET quantity = quantity + quantityRemoved\
+WHERE product_id = productID;\
+\
+\
+END$$\
+DELIMITER ;\
+\
+/* STORED PROCEDURE - ADD PRODUCT */\
+DELIMITER $$\
+CREATE DEFINER=`root`@`localhost` PROCEDURE `add_product`(productName VARCHAR(255), companyName VARCHAR(255), cost INT, numberOfProducts INT)\
+BEGIN\
+\
+INSERT INTO products (product_name, company_name, price, quantity)\
+VALUES (productName, companyName, cost, numberOfProducts);\
+\
+END$$\
+DELIMITER ;\
+\
+/* STORED PROCEDURE - REMOVE PRODUCT */\
+DELIMITER $$\
+CREATE PROCEDURE `remove_product` (id int)\
+BEGIN\
+\
+DELETE FROM products \
+WHERE product_id = id;\
+\
+END$$\
+DELIMITER ;\
+\
+/* STORED PROCEDURE - ADD STAFF */\
+DELIMITER $$\
+CREATE DEFINER=`root`@`localhost` PROCEDURE `add_staff`(name VARCHAR(255), phone_number VARCHAR(255), email VARCHAR(255))\
+BEGIN\
+\
+INSERT INTO staff (staff_name, staff_phone_number, staff_email)\
+VALUES (name, phone_number, email);\
+\
+END$$\
+DELIMITER ;\
+\
+/* STORED PROCEDURE - REMOVE STAFF */\
+DELIMITER $$\
+CREATE PROCEDURE `remove_staff` (id int)\
+BEGIN\
+\
+DELETE FROM staff \
+WHERE staff_id = id;\
+\
+END$$\
+DELIMITER ;\
+\
+/* STORED PROCEDURE - ADD SUPPLIER */\
+DELIMITER $$\
+CREATE DEFINER=`root`@`localhost` PROCEDURE `add_supplier`(companyName VARCHAR(255), companyWebsite VARCHAR(255), companyAddress VARCHAR(255), companyContactPerson VARCHAR(255))\
+BEGIN\
+\
+INSERT INTO suppliers (company_name, company_website, company_address, company_contact_person)\
+VALUES (companyName, companyWebsite, companyAddress, companyContactPerson);\
+\
+END$$\
+DELIMITER ;\
+\
+/* STORED PROCEDURE - REMOVE SUPPLIER */\
+DELIMITER $$\
+CREATE PROCEDURE `remove_supplier` (id int)\
+BEGIN\
+\
+DELETE FROM suppliers \
+WHERE supplier_id = id;\
+\
+END$$\
+DELIMITER ;\
+\
+-- STORED PROCEDURE CHECK PREVIOUS TRANSACTIONS\
+DELIMITER $$\
+CREATE PROCEDURE `check_previous_transactions` ()\
+BEGIN\
+SELECT * FROM transaction_history;\
+END$$\
+\
+DELIMITER ;\
+\
+-- STORED PROCEDURE CHECK STOCK \
+DELIMITER $$\
+CREATE PROCEDURE `check_stock` ()\
+BEGIN\
+SELECT product_id, quantity FROM products;\
+END$$\
+\
+DELIMITER ;\
+\
+\
+/* DEFAULT VALUES */\
+call furniture_store.add_customer('Patrik','0701121212', 'patrik@hotmail.com', '123456789101112');\
+-- call furniture_store.add_customer('Batrik','0721121212', 'batrik@hotmail.com', '223456789101112');\
+-- call furniture_store.add_customer('Tatrik','0731121212', 'tatrik@hotmail.com', '323456789101112');\
+\
+call furniture_store.add_order(1, 100, 1, '2022-05-09', '1500');\
+call furniture_store.add_order(2, 50, 1, '2022-05-09', '300');\
+call furniture_store.add_order(3, 200, 1, '2022-05-09', '200');\
+\
+call furniture_store.add_product('StolN', 'Ikea', 299, 200);\
+call furniture_store.add_product('BordT', 'Ibea', 999, 50);\
+call furniture_store.add_product('LampN', 'Idea', 599, 150);\
+\
+call furniture_store.add_staff('Latrik', '0701112512', 'lat@jobb.se');\
+call furniture_store.add_staff('Satrik', '0721112512', 'sat@jobb.se');\
+call furniture_store.add_staff('Ratrik', '0731112512', 'Rat@jobb.se');\
+\
+call furniture_store.add_supplier('Ikea', 'www.ikea.se', 'Ikeagatan 2, Stockholm', 'Ingvar');\
+call furniture_store.add_supplier('Idea', 'www.idea.se', 'Ideagatan 2, Stockholm', 'Yngvar');\
+call furniture_store.add_supplier('Ibea', 'www.ibea.se', 'Ibeagatan 2, Stockholm', 'Jngvar');\
+}
